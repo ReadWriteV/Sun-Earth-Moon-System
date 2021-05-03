@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.19)
 
-project(test)
+project(Blinn-Phong)
 
 set(CMAKE_BUILD_TYPE "Release")
 
@@ -16,6 +16,6 @@ link_directories(D:/SDK/glfw-3.3.4/lib-vc2019)
 link_directories(D:/SDK/glew-2.2.0/lib/Release/x64)
 link_directories(D:/SDK/SOIL2/lib)
 
-add_executable(test src/main.cpp src/sphere.cpp)
+add_executable(${PROJECT_NAME} src/main.cpp src/sphere.cpp)
 
-target_link_libraries(test glfw3 glew32s opengl32 soil2)
+target_link_libraries(${PROJECT_NAME} glfw3 glew32s opengl32 soil2)
