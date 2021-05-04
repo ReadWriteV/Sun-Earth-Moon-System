@@ -5,16 +5,16 @@ project(Blinn-Phong)
 set(CMAKE_BUILD_TYPE "Release")
 
 include_directories(include)
-include_directories(D:/SDK/glfw-3.3.4/include)
-include_directories(D:/SDK/glew-2.2.0/include)
-include_directories(D:/SDK/glm-0.9.9.8)
-include_directories(D:/SDK/SOIL2/include)
+include_directories(path/to/glfw/include)
+include_directories(path/to/glew/include)
+include_directories(path/to/glm)
+include_directories(path/to/SOIL2/include)
 
 add_definitions(-DGLEW_STATIC)
 
-link_directories(D:/SDK/glfw-3.3.4/lib-vc2019)
-link_directories(D:/SDK/glew-2.2.0/lib/Release/x64)
-link_directories(D:/SDK/SOIL2/lib)
+link_directories(path/to/glfw/lib-vc2019)
+link_directories(path/to/glew/lib/Release/x64)
+link_directories(path/to/SOIL2/lib)
 
 add_executable(${PROJECT_NAME} src/main.cpp src/sphere.cpp)
 
