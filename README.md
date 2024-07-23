@@ -1,15 +1,24 @@
-# Blinn-Phong
+# Sun Earth Moon System
 
-Blinn-Phong lighting model implemented by OpenGL. Take the Sun, Earth, and Moon galaxies as the display object.
+Sun Earth Moon System implemented with OpenGL.
 
-## Build
+## Dependency
+
++ a c++ compiler
++ cmake
++ glfw
++ glad
++ glm
++ stb_image
+
+## How to start
 
 ``` bash
-mkdir build
+git clone https://github.com/ReadWriteV/Sun-Earth-Moon-System.git
 
-cd build
+cd Sun-Earth-Moon-System
 
-cmake ..
+cmake --preset default
 
-cmake --build .
+cmake --build build
 ```
