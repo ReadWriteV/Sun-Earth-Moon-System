@@ -1,135 +1,33 @@
 #pragma once
 
-#include <GL\glew.h>
-#include <SOIL2.h>
+#include <string_view>
 
-#include <iostream>
-#include <fstream>
-#include <string>
+#include <glad/glad.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 namespace utils
 {
-    std::string readShaderSource(const std::string &file)
+    GLuint loadTexture(std::string_view file)
     {
-        std::string content;
-        std::ifstream fileStream(file, std::ios::in);
-        if (fileStream.fail())
+        unsigned int texture;
+        glGenTextures(1, &texture);
+        glBindTexture(GL_TEXTURE_2D, texture);
+
+        int width, height, nrChannels;
+        stbi_set_flip_vertically_on_load(true);
+        unsigned char *data = stbi_load(file.data(), &width, &height,
+                                        &nrChannels, 0);
+
+        if (!data)
         {
-            std::cout << "open " << file << " failed" << std::endl;
-            std::exit(1);
+            throw std::runtime_error{"Failed to load texture: " + std::string{file}};
         }
-        std::string line;
-        while (!fileStream.eof())
-        {
-            std::getline(fileStream, line);
-            content.append(line + "\n");
-        }
-        fileStream.close();
-        return content;
-    }
-
-    void printShaderLog(GLuint shader)
-    {
-        int len = 0;
-        int chWritrn = 0;
-        char *log;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
-        if (len > 0)
-        {
-            log = new char[len];
-            glGetShaderInfoLog(shader, len, &chWritrn, log);
-            std::cout << "Shader Info Log: " << log << std::endl;
-            delete log;
-        }
-    }
-
-    void printProgramLog(GLuint prog)
-    {
-        int len = 0;
-        int chWritrn = 0;
-        char *log;
-        glGetProgramiv(prog, GL_INFO_LOG_LENGTH, &len);
-        if (len > 0)
-        {
-            log = new char[len];
-            glGetProgramInfoLog(prog, len, &chWritrn, log);
-            std::cout << "Program Info Log: " << log << std::endl;
-            delete log;
-        }
-    }
-
-    bool checkOpenGLError()
-    {
-        bool foundError = false;
-        auto glErr = glGetError();
-        while (glErr != GL_NO_ERROR)
-        {
-            std::cout << "glError: " << glErr << std::endl;
-            foundError = true;
-            glErr = glGetError();
-        }
-        return foundError;
-    }
-
-    GLuint createShaderProgram()
-    {
-        GLint vertCompiled, fragCompiled, linked;
-
-        auto vertShaderStr = readShaderSource("../shader/vertShader.glsl");
-        auto vshaderSource = vertShaderStr.c_str();
-
-        auto fragShaderStr = readShaderSource("../shader/fragShader.glsl");
-        auto fshaderSource = fragShaderStr.c_str();
-
-        auto vShader = glCreateShader(GL_VERTEX_SHADER);
-        auto fShader = glCreateShader(GL_FRAGMENT_SHADER);
-
-        glShaderSource(vShader, 1, &vshaderSource, nullptr);
-        glShaderSource(fShader, 1, &fshaderSource, nullptr);
-
-        glCompileShader(vShader);
-        checkOpenGLError();
-        glGetShaderiv(vShader, GL_COMPILE_STATUS, &vertCompiled);
-        if (vertCompiled != 1)
-        {
-            std::cout << "vertex compilation failed" << std::endl;
-            printShaderLog(vShader);
-        }
-
-        glCompileShader(fShader);
-        checkOpenGLError();
-        glGetShaderiv(fShader, GL_COMPILE_STATUS, &fragCompiled);
-        if (fragCompiled != 1)
-        {
-            std::cout << "fragment compilation failed" << std::endl;
-            printShaderLog(fShader);
-        }
-
-        auto vfProgram = glCreateProgram();
-        glAttachShader(vfProgram, vShader);
-        glAttachShader(vfProgram, fShader);
-
-        glLinkProgram(vfProgram);
-        checkOpenGLError();
-        glGetProgramiv(vfProgram, GL_LINK_STATUS, &linked);
-        if (linked != 1)
-        {
-            std::cout << "linking failed" << std::endl;
-            printProgramLog(vfProgram);
-        }
-
-        return vfProgram;
-    }
-
-    GLuint loadTexture(const std::string &file)
-    {
-        GLuint textureID = SOIL_load_OGL_texture(file.c_str(), SOIL_LOAD_AUTO, SOIL_CREATE_NEW_ID, SOIL_FLAG_INVERT_Y);
-        if (textureID == 0)
-        {
-            std::cout << "could not load texture file " << file << std::endl;
-            std::exit(1);
-        }
-        return textureID;
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        stbi_image_free(data);
+        return texture;
     }
 
     float *goldAmbient()

@@ -1,99 +1,93 @@
-#include <GL\glew.h>
-#include <GLFW\glfw3.h>
-#include <glm\glm.hpp>
-#include <glm\gtc\matrix_transform.hpp>
-#include <glm\gtc\type_ptr.hpp>
-
 #include <cmath>
-#include <stack>
+#include <cassert>
+#include <iostream>
 #include <algorithm>
 
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "shader.hpp"
 #include "utils.hpp"
 #include "sphere.h"
+#include "camera.hpp"
 
-#define numVAOs 1
-#define numVBOs 4
-
-float cameraX, cameraY, cameraZ;
 int width, height;
-float aspect;
 
-GLuint renderingProgram;
-GLuint vao[numVAOs], vbo[numVBOs];
+constexpr std::size_t numVBOs{4};
+
+GLuint VAO, VBO[numVBOs], EBO;
 
 GLuint texture_sun, texture_earth, texture_moon;
 
-GLuint mvLoc, projLoc, nLoc;
-GLuint globalAmbLoc, ambLoc, diffLoc, specLoc, posLoc, mAmbLoc, mDiffLoc, mSpecLoc, mShiLoc;
-
-glm::mat4 pMat, vMat, mMat, mvMat, invTrMat;
-
-glm::vec3 currentLightPos, lightPosV;
-float lightPos[3];
-
-std::stack<glm::mat4> mvStack;
-
 Sphere mySphere(48);
+ShaderProgram renderingProgram;
+Camera camera{glm::vec3(0.0f, 0.0f, 20.0f)};
 
-glm::vec3 initialLightLoc = glm::vec3(0.0f, 0.0f, 0.0f);
-
-float globalAmbient[4] = {0.7f, 0.7f, 0.7f, 1.0f};
-float lightAmbient[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-float lightDiffuse[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-float lightSpecular[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-
-float *matAmb = utils::goldAmbient();
-float *matDif = utils::goldDiffuse();
-float *matSpe = utils::goldSpecular();
-float matShi = utils::goldShininess();
-
-void installLights(const glm::mat4 &vMatrix)
+void mouse_callback(GLFWwindow *window, double xposIn, double yposIn)
 {
-    lightPosV = glm::vec3(vMatrix * glm::vec4(currentLightPos, 1.0f));
-    lightPos[0] = lightPosV.x;
-    lightPos[1] = lightPosV.y;
-    lightPos[2] = lightPosV.z;
+    static bool firstMouse = true;
+    static float lastX = width / 2.f;
+    static float lastY = height / 2.f;
 
-    globalAmbLoc = glGetUniformLocation(renderingProgram, "globalAmbient");
-    ambLoc = glGetUniformLocation(renderingProgram, "light.ambient");
-    diffLoc = glGetUniformLocation(renderingProgram, "light.diffuse");
-    specLoc = glGetUniformLocation(renderingProgram, "light.specular");
-    posLoc = glGetUniformLocation(renderingProgram, "light.position");
-    mAmbLoc = glGetUniformLocation(renderingProgram, "material.ambient");
-    mDiffLoc = glGetUniformLocation(renderingProgram, "material.diffuse");
-    mSpecLoc = glGetUniformLocation(renderingProgram, "material.specular");
-    mShiLoc = glGetUniformLocation(renderingProgram, "material.shininess");
+    float xpos = static_cast<float>(xposIn);
+    float ypos = static_cast<float>(yposIn);
 
-    glProgramUniform4fv(renderingProgram, globalAmbLoc, 1, globalAmbient);
-    glProgramUniform4fv(renderingProgram, ambLoc, 1, lightAmbient);
-    glProgramUniform4fv(renderingProgram, diffLoc, 1, lightDiffuse);
-    glProgramUniform4fv(renderingProgram, specLoc, 1, lightSpecular);
-    glProgramUniform3fv(renderingProgram, posLoc, 1, lightPos);
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
 
-    glProgramUniform4fv(renderingProgram, mAmbLoc, 1, matAmb);
-    glProgramUniform4fv(renderingProgram, mDiffLoc, 1, matDif);
-    glProgramUniform4fv(renderingProgram, mSpecLoc, 1, matSpe);
-    glProgramUniform1f(renderingProgram, mShiLoc, matShi);
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
+    lastX = xpos;
+    lastY = ypos;
+
+    camera.processMouseMovement(xoffset, yoffset);
 }
 
-void window_resize(GLFWwindow *window, int w, int h)
+void processInput(GLFWwindow *window, float deltaTime)
 {
-    aspect = static_cast<float>(w) / static_cast<float>(h);
-    glViewport(0, 0, w, h);
-    pMat = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f);
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    {
+        glfwSetWindowShouldClose(window, true);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    {
+        camera.processKeyboard(Camera::Movement::FORWARD, deltaTime);
+    }
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    {
+        camera.processKeyboard(Camera::Movement::BACKWARD, deltaTime);
+    }
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    {
+        camera.processKeyboard(Camera::Movement::LEFT, deltaTime);
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    {
+        camera.processKeyboard(Camera::Movement::RIGHT, deltaTime);
+    }
 }
 
 void setupVertices()
 {
-    auto numVertices = mySphere.getNumVertices();
     std::vector<int> ind;
-    std::transform(mySphere.getIndices().begin(), mySphere.getIndices().end(), std::back_inserter(ind), [](size_t i) -> int { return static_cast<int>(i); });
-    auto vert = mySphere.getVertices();
-    auto tex = mySphere.getTexCoords();
-    auto norm = mySphere.getNormals();
+    std::transform(mySphere.getIndices().begin(), mySphere.getIndices().end(), std::back_inserter(ind), [](size_t i) -> int
+                   { return static_cast<int>(i); });
 
     std::vector<float> pvalues, tvalues, nvalues;
 
+    const auto &vert = mySphere.getVertices();
+    const auto &tex = mySphere.getTexCoords();
+    const auto &norm = mySphere.getNormals();
+
+    auto numVertices = mySphere.getNumVertices();
     for (size_t i = 0; i < numVertices; i++)
     {
         pvalues.push_back(vert.at(i).x);
@@ -108,209 +102,156 @@ void setupVertices()
         nvalues.push_back(norm.at(i).z);
     }
 
-    glGenVertexArrays(numVAOs, vao);
-    glBindVertexArray(vao[0]);
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(numVBOs, VBO);
+    glGenBuffers(1, &EBO);
 
-    glGenBuffers(numVBOs, vbo);
+    glBindVertexArray(VAO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glBufferData(GL_ARRAY_BUFFER, pvalues.size() * sizeof(decltype(pvalues)::value_type), &pvalues.at(0), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+    glBufferData(GL_ARRAY_BUFFER, pvalues.size() * sizeof(float), pvalues.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glBufferData(GL_ARRAY_BUFFER, tvalues.size() * sizeof(decltype(tvalues)::value_type), &tvalues.at(0), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+    glBufferData(GL_ARRAY_BUFFER, tvalues.size() * sizeof(float), tvalues.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(1);
 
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    glBufferData(GL_ARRAY_BUFFER, nvalues.size() * sizeof(decltype(nvalues)::value_type), &nvalues.at(0), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[2]);
+    glBufferData(GL_ARRAY_BUFFER, nvalues.size() * sizeof(float), nvalues.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(2);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ind.size() * sizeof(decltype(ind)::value_type), &ind.at(0), GL_STATIC_DRAW);
-}
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, ind.size() * sizeof(int), ind.data(), GL_STATIC_DRAW);
 
-void init(GLFWwindow *window)
-{
-    renderingProgram = utils::createShaderProgram();
-    cameraX = 0.0f;
-    cameraY = 0.0f;
-    cameraZ = 10.0f;
-    setupVertices();
-
-    glfwGetFramebufferSize(window, &width, &height);
-    aspect = static_cast<float>(width) / static_cast<float>(height);
-    pMat = glm::perspective(1.0472f, aspect, 0.1f, 1000.0f);
-
-    texture_sun = utils::loadTexture("../assets/sun.png");
-    texture_earth = utils::loadTexture("../assets/earth.png");
-    texture_moon = utils::loadTexture("../assets/moon.png");
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void display(GLFWwindow *window, double currentTime)
 {
     float factor = static_cast<float>(currentTime);
 
-    glClear(GL_DEPTH_BUFFER_BIT);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glUseProgram(renderingProgram);
+    auto view = camera.getViewMatrix();
+    renderingProgram.setUniformValue("view", view);
 
-    mvLoc = glGetUniformLocation(renderingProgram, "mv_matrix");
-    projLoc = glGetUniformLocation(renderingProgram, "proj_matrix");
-    nLoc = glGetUniformLocation(renderingProgram, "norm_matrix");
+    auto projection = glm::perspective(glm::radians(camera.getZoom()), static_cast<float>(width) / static_cast<float>(height), 0.1f, 100.0f);
+    renderingProgram.setUniformValue("projection", projection);
 
-    vMat = glm::translate(glm::mat4(1.0f), glm::vec3(-cameraX, -cameraY, -cameraZ));
-    mvStack.push(vMat);
+    renderingProgram.setUniformValue("lightPos", glm::vec3{0.f, 0.f, 0.f});
+    renderingProgram.setUniformValue("lightColor", glm::vec3{1.f, 1.f, 1.f});
 
-    // 太阳
-    mvStack.push(mvStack.top());
-    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f)); // 太阳位置
-    mvStack.push(mvStack.top());
-    mvStack.top() *= glm::rotate(glm::mat4(1.0f), factor, glm::vec3(1.0f, 0.0f, 0.0f)); // 太阳自转
-
-    invTrMat = glm::transpose(glm::inverse(mvStack.top()));
-
-    currentLightPos = glm::vec3(std::sin(factor) * initialLightLoc.x, std::cos(factor) * initialLightLoc.y, initialLightLoc.z);
-    // currentLightPos = glm::vec3(initialLightLoc.x, initialLightLoc.y, initialLightLoc.z);
-    installLights(vMat);
-
-    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
-    glUniformMatrix4fv(nLoc, 1, GL_FALSE, glm::value_ptr(invTrMat));
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(2);
+    // sun
+    glm::mat4 model{1.f};
+    model = glm::translate(model, glm::vec3(0.f, 0.f, 0.f));                         // sun position
+    auto sun_model = glm::rotate(model, factor * 0.5f, glm::vec3(0.0f, 0.0f, 1.0f)); // 太阳自转
+    renderingProgram.setUniformValue("model", sun_model);
+    renderingProgram.setUniformValue("isLight", 1);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture_sun);
 
-    glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CCW);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, static_cast<int>(mySphere.getNumIndices()), GL_UNSIGNED_INT, 0);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-    glDrawElements(GL_TRIANGLES, mySphere.getNumIndices(), GL_UNSIGNED_INT, 0);
-    mvStack.pop();
+    renderingProgram.setUniformValue("isLight", 0);
 
-    // 地球
-    mvStack.push(mvStack.top());
-    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(std::sin(factor) * 4.0f, 0.0f, std::cos(factor) * 4.0f)); // 地球位置
-    mvStack.push(mvStack.top());
-    mvStack.top() *= glm::rotate(glm::mat4(1.0f), static_cast<float>(currentTime), glm::vec3(0.0f, 1.0f, 0.0f)); // 地球自转
-    mvStack.top() *= glm::scale(glm::mat4(1.0f), glm::vec3(0.5f, 0.5f, 0.5f));
-
-    invTrMat = glm::transpose(glm::inverse(mvStack.top()));
-    currentLightPos = glm::vec3(initialLightLoc.x, initialLightLoc.y, initialLightLoc.z);
-    installLights(vMat);
-
-    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
-    glUniformMatrix4fv(nLoc, 1, GL_FALSE, glm::value_ptr(invTrMat));
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(2);
+    // earth
+    model = glm::translate(model, glm::vec3(std::cos(factor) * 8.0f, std::sin(factor) * 6.0f, 0.f)); // earth position
+    auto earth_model = glm::rotate(model, factor * 5, glm::vec3(0.0f, 0.0f, 1.0f));                  // 地球自转
+    earth_model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+    renderingProgram.setUniformValue("model", earth_model);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture_earth);
 
-    glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CCW);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, static_cast<int>(mySphere.getNumIndices()), GL_UNSIGNED_INT, 0);
 
-    // glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-    glDrawElements(GL_TRIANGLES, mySphere.getNumIndices(), GL_UNSIGNED_INT, 0);
-    mvStack.pop();
-
-    // 月球
-    mvStack.push(mvStack.top());
-    mvStack.top() *= glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, std::sin(factor) * 2.0f, std::cos(factor) * 2.0f)); // 月球位置
-    mvStack.top() *= glm::rotate(glm::mat4(1.0f), static_cast<float>(currentTime), glm::vec3(0.0f, 0.0f, 1.0f));         // 月球自转
-    mvStack.top() *= glm::scale(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, 0.25f));
-
-    invTrMat = glm::transpose(glm::inverse(mvStack.top()));
-    currentLightPos = glm::vec3(initialLightLoc.x, initialLightLoc.y, initialLightLoc.z);
-    installLights(vMat);
-    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, glm::value_ptr(mvStack.top()));
-    glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(pMat));
-    glUniformMatrix4fv(nLoc, 1, GL_FALSE, glm::value_ptr(invTrMat));
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo[2]);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-    glEnableVertexAttribArray(2);
+    // moon
+    model = glm::translate(model, glm::vec3(std::cos(2 * factor) * 2.0f, std::sin(2 * factor) * 2.0f, 0.f)); // moon position
+    model = glm::rotate(model, factor, glm::vec3(0.0f, 0.0f, 1.0f));                                         // 月球自转
+    model = glm::scale(model, glm::vec3(0.25f, 0.25f, 0.25f));
+    renderingProgram.setUniformValue("model", model);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture_moon);
 
-    glEnable(GL_CULL_FACE);
-    glFrontFace(GL_CCW);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LEQUAL);
-
-    // glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo[3]);
-    glDrawElements(GL_TRIANGLES, mySphere.getNumIndices(), GL_UNSIGNED_INT, 0);
-    mvStack.pop();
-
-    mvStack.pop();
-    mvStack.pop();
-    mvStack.pop();
+    glBindVertexArray(VAO);
+    glDrawElements(GL_TRIANGLES, static_cast<int>(mySphere.getNumIndices()), GL_UNSIGNED_INT, 0);
 }
 
-int main()
+int main(int, char **)
 {
-    if (!glfwInit())
+    assert(glfwInit() == GLFW_TRUE);
+    try
     {
-        std::exit(1);
-    }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    auto window = glfwCreateWindow(600, 600, "Blinn-Phong", nullptr, nullptr);
-    glfwMakeContextCurrent(window);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    if (glewInit() != GLEW_OK)
+        auto window = glfwCreateWindow(800, 600, "Sun Earth Moon System", nullptr, nullptr);
+        if (window == nullptr)
+        {
+            std::cout << "Failed to create GLFW window\n";
+            glfwTerminate();
+            return -1;
+        }
+        glfwMakeContextCurrent(window);
+
+        glfwSetFramebufferSizeCallback(window, [](GLFWwindow *window, int w, int h)
+                                       {    width = w;    height = h;    glViewport(0, 0, width, height); });
+        glfwSetCursorPosCallback(window, mouse_callback);
+        glfwSetScrollCallback(window, [](GLFWwindow *window, double xoffset, double yoffset)
+                              { camera.processMouseScroll(static_cast<float>(yoffset)); });
+
+        // tell GLFW to capture our mouse
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+        if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress)))
+        {
+            std::cout << "Failed to initialize GLAD\n";
+            glfwDestroyWindow(window);
+            glfwTerminate();
+            return -1;
+        }
+
+        glfwGetFramebufferSize(window, &width, &height);
+
+        texture_sun = utils::loadTexture("assets/sun.jpg");
+        texture_earth = utils::loadTexture("assets/earth.jpg");
+        texture_moon = utils::loadTexture("assets/moon.jpg");
+
+        setupVertices();
+
+        renderingProgram.addShaderSourceFromFile("shader/vertShader.glsl", ShaderProgram::ShaderType::VertexShader);
+        renderingProgram.addShaderSourceFromFile("shader/fragShader.glsl", ShaderProgram::ShaderType::FragmentShader);
+        renderingProgram.link();
+        renderingProgram.use();
+
+        float last_time = static_cast<float>(glfwGetTime());
+
+        while (!glfwWindowShouldClose(window))
+        {
+            float delta_time = static_cast<float>(glfwGetTime()) - last_time;
+            last_time = static_cast<float>(glfwGetTime());
+            processInput(window, delta_time);
+            display(window, glfwGetTime());
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+        }
+
+        glfwDestroyWindow(window);
+    }
+    catch (const std::exception &e)
     {
-        std::exit(1);
+        std::cerr << e.what() << '\n';
     }
-
-    glfwSwapInterval(1);
-    glfwSetWindowSizeCallback(window, window_resize);
-    init(window);
-
-    while (!glfwWindowShouldClose(window))
-    {
-        display(window, glfwGetTime());
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    glfwDestroyWindow(window);
     glfwTerminate();
     return 0;
 }

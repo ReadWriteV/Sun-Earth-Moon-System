@@ -1,65 +1,20 @@
-#version 430
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec2 aTexCoord;
+layout (location = 2) in vec3 aNormal;
 
-layout (location=0) in vec3 vertPos;
-layout (location=2) in vec2 texCoords;
-layout (location=2) in vec3 vertNormal;
+out vec2 TexCoord;
+out vec3 Normal;
+out vec3 FragPos;
 
-out vec3 varyingNormal;
-out vec3 varyingLightDir;
-out vec3 varyingVertPos;
-out vec3 varyingHalfVector;
-out vec2 tc;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 
-struct PositionalLight
+void main()
 {
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 position;
-};
-
-struct Material
-{
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    float shininess;
-};
-
-layout (binding=0) uniform sampler2D samp;
-
-uniform vec4 globalAmbient;
-uniform PositionalLight light;
-uniform Material material;
-uniform mat4 mv_matrix;
-uniform mat4 proj_matrix;
-uniform mat4 norm_matrix;
-
-void main(void)
-{
-    // vec4 color;
-
-    // vec4 P = mv_matrix * vec4(vertPos, 1.0);
-    // vec3 N = normalize((norm_matrix * vec4(vertNormal, 1.0)).xyz);
-    // vec3 L = normalize(light.position - P.xyz);
-
-    // vec3 V = normalize(-P.xyz);
-
-    // vec3 R = reflect(-L, N);
-
-    // vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz;
-    // vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(dot(N, L), 0.0);
-    // vec3 specular = light.specular.xyz *  material.specular.xyz * pow(max(dot(R, V), 0.0), material.shininess);
-
-    // varyingColor = vec4((ambient + diffuse + specular), 1.0);
-
-    // gl_Position = proj_matrix * mv_matrix *  vec4(vertPos, 1.0);
-
-    varyingVertPos = (mv_matrix * vec4(vertPos, 1.0)).xyz;
-    varyingLightDir = light.position - varyingVertPos;
-    varyingNormal = (norm_matrix * vec4(vertNormal, 1.0)).xyz;
-    varyingHalfVector = (varyingLightDir + (-varyingVertPos)).xyz;
-    gl_Position = proj_matrix * mv_matrix *  vec4(vertPos, 1.0);
-
-    tc = texCoords;
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
+    Normal = aNormal;
+    FragPos = vec3(model * vec4(aPos, 1.0));
 }

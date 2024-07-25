@@ -1,55 +1,34 @@
-#version 430
+#version 330 core
 
-in vec3 varyingNormal;
-in vec3 varyingLightDir;
-in vec3 varyingVertPos;
-in vec3 varyingHalfVector;
-in vec2 tc;
+in vec2 TexCoord;
+in vec3 Normal;
+in vec3 FragPos;
 
-out vec4 fragColor;
+out vec4 FragColor;
 
-struct PositionalLight
+uniform sampler2D ourTexture;
+uniform vec3 lightPos;
+uniform vec3 lightColor;
+uniform int isLight;
+
+void main()
 {
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    vec3 position;
-};
+    float ambientStrength = 0.1;
+    vec3 ambient = ambientStrength * lightColor;
 
-struct Material
-{
-    vec4 ambient;
-    vec4 diffuse;
-    vec4 specular;
-    float shininess;
-};
+    vec3 norm = normalize(Normal);
+    vec3 lightDir = normalize(lightPos - FragPos);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = diff * lightColor;
 
-layout (binding=0) uniform sampler2D samp;
+    vec4 objectColor = texture(ourTexture, TexCoord);
 
-uniform vec4 globalAmbient;
-uniform PositionalLight light;
-uniform Material material;
-uniform mat4 mv_matrix;
-uniform mat4 proj_matrix;
-uniform mat4 norm_matrix;
-
-void main(void)
-{
-    // fragColor = varyingColor;
-    vec3 L = normalize(varyingLightDir);
-    vec3 N = normalize(varyingNormal);
-    vec3 V = normalize(-varyingVertPos);
-    vec3 H = normalize(varyingHalfVector);
-
-    // vec3 R = normalize(reflect(-L, N));
-    float cosTheta = dot(L, N);
-    // float cosPhi = dot(V, R);
-    float cosPhi = dot(H, N);
-
-    vec3 ambient = ((globalAmbient * material.ambient) + (light.ambient * material.ambient)).xyz * vec3(texture(samp, tc));
-    vec3 diffuse = light.diffuse.xyz * material.diffuse.xyz * max(cosTheta, 0.0);
-    // vec3 specular = light.specular.xyz *  material.specular.xyz * pow(max(cosPhi, 0.0), material.shininess);
-    vec3 specular = light.specular.xyz *  material.specular.xyz * pow(max(cosPhi, 0.0), material.shininess * 3.0);
-
-    fragColor = vec4((ambient + diffuse + specular), 1.0);
+    if (isLight == 1)
+    {
+        FragColor = objectColor;
+    }
+    else
+    {
+        FragColor = (vec4(ambient, 1.0) + vec4(diffuse, 1.0)) * objectColor;
+    }
 }
