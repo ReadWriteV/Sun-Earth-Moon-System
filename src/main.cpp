@@ -164,7 +164,7 @@ void display(GLFWwindow *window, double currentTime)
     // earth
     model = glm::translate(model, glm::vec3(std::cos(factor) * 8.0f, std::sin(factor) * 6.0f, 0.f)); // earth position
     auto earth_model = glm::rotate(model, factor * 5, glm::vec3(0.0f, 0.0f, 1.0f));                  // 地球自转
-    earth_model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));
+    earth_model = glm::scale(earth_model, glm::vec3(0.5f, 0.5f, 0.5f));
     renderingProgram.setUniformValue("model", earth_model);
 
     glActiveTexture(GL_TEXTURE0);
