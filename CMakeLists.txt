@@ -1,21 +1,13 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.5.0)
 
-project(Blinn-Phong)
+project(SunEarthMoonSystem VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_CXX_STANDARD 17)
 
-include_directories(include)
-include_directories(path/to/glfw/include)
-include_directories(path/to/glew/include)
-include_directories(path/to/glm)
-include_directories(path/to/SOIL2/include)
+find_package(glad CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(Stb REQUIRED)
 
-add_definitions(-DGLEW_STATIC)
-
-link_directories(path/to/glfw/lib-vc2019)
-link_directories(path/to/glew/lib/Release/x64)
-link_directories(path/to/SOIL2/lib)
-
-add_executable(${PROJECT_NAME} src/main.cpp src/sphere.cpp)
-
-target_link_libraries(${PROJECT_NAME} glfw3 glew32s opengl32 soil2)
+add_executable(${PROJECT_NAME} src/main.cpp src/sphere.cpp src/shader.cpp src/camera.cpp)
+target_include_directories(${PROJECT_NAME} PRIVATE ${Stb_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(${PROJECT_NAME} PRIVATE glad::glad glfw)
